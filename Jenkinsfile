@@ -26,7 +26,7 @@ pipeline {
         SMTP_USER        = credentials('smtp-user')
         SMTP_PASS        = credentials('smtp-pass')
         REPORT_FROM      = credentials('sender-email')
-        REPORT_TO        = credentials('multi-receiver')
+        REPORT_TO        = credentials('multi-receivers')
 
         // --- Project Paths ---
         REPORT_DIR       = 'report'
