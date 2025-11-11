@@ -1,50 +1,64 @@
-import sys
 import os
+import sys
 import requests
 from requests.auth import HTTPBasicAuth
 
-# Ensure UTF-8 encoding (safety net)
-sys.stdout.reconfigure(encoding='utf-8')
-
+# -----------------------------
+# Usage: fetch_saved_rtm_report.py <jira_base> <jira_user> <jira_token> <project_key> <report_id>
+# -----------------------------
 if len(sys.argv) < 6:
-    print("Usage: fetch_saved_rtm_report.py <jira_base> <jira_user> <jira_token> <project_key> <report_name>")
+    print("Usage: fetch_saved_rtm_report.py <jira_base> <jira_user> <jira_token> <project_key> <report_id>")
     sys.exit(1)
 
-jira_base, jira_user, jira_token, project_key, report_name = sys.argv[1:6]
+jira_base, jira_user, jira_token, project_key, report_id = sys.argv[1:6]
 
 auth = HTTPBasicAuth(jira_user, jira_token)
 headers = {"Accept": "application/json"}
-
 report_dir = "report"
 os.makedirs(report_dir, exist_ok=True)
 
-# --- Replace emojis with plain text ---
-print(f"[INFO] Searching for Saved RTM Reports in project {project_key}...")
+pdf_file = os.path.join(report_dir, f"rtm_saved_report_{report_id}.pdf")
+html_file = os.path.join(report_dir, f"rtm_saved_report_{report_id}.html")
 
-possible_paths = [
-    f"{jira_base}/atm-cloud/rest/api/latest/reports/saved?projectKey={project_key}",
-    f"{jira_base}/rest/atm/1.0/reports/saved?projectKey={project_key}",
-    f"{jira_base}/jira/apps/64e045b8-e29a-40e5-bd2e-0cfdf4e8d4bb/7a2911d3-7421-4d99-89f7-762313d01b40/reports/saved?projectKey={project_key}",
-    f"{jira_base}/apps/rtm-api/rest/api/latest/reports/saved?projectKey={project_key}",
-]
+print(f"[INFO] Starting RTM Saved Report Fetch for project {project_key}")
+print(f"[INFO] Report ID: {report_id}")
 
-report_list = None
-selected_url = None
+# -----------------------------
+# Construct the file-download URL
+# -----------------------------
+file_download_url = f"https://rtm-cloud.herokuapp.com/file-download?reportId={report_id}&format=pdf"
+print(f"[TRY] Accessing: {file_download_url}")
 
-for url in possible_paths:
-    print(f"[TRY]  {url}")
-    try:
-        resp = requests.get(url, auth=auth, headers=headers)
-        if resp.status_code == 200:
-            report_list = resp.json()
-            selected_url = url
-            print(f"[OK]   Success using endpoint: {url}")
-            break
-        else:
-            print(f"[FAIL] GET {url} -> {resp.status_code}")
-    except Exception as e:
-        print(f"[ERROR] {e}")
-
-if not report_list:
-    print("[ERROR] Could not retrieve Saved Reports from any known endpoint.")
+try:
+    resp = requests.get(file_download_url, auth=auth, headers=headers, stream=True)
+    if resp.status_code == 200 and "application/pdf" in resp.headers.get("Content-Type", ""):
+        with open(pdf_file, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+        print(f"[OK]  PDF Report downloaded successfully → {pdf_file}")
+    else:
+        print(f"[FAIL] Unable to download report: HTTP {resp.status_code}")
+        print(resp.text[:300])
+        sys.exit(1)
+except Exception as e:
+    print(f"[ERROR] {e}")
     sys.exit(1)
+
+# -----------------------------
+# Optional: Convert PDF to HTML placeholder (for Confluence upload)
+# -----------------------------
+try:
+    html_content = f"""
+    <h2>RTM Test Execution Report</h2>
+    <p>Project Key: {project_key}</p>
+    <p>Report ID: {report_id}</p>
+    <p>Generated from Jira RTM Cloud.</p>
+    <p><b>Download PDF:</b> <a href='{file_download_url}' target='_blank'>Click here</a></p>
+    """
+    with open(html_file, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    print(f"[OK]  HTML summary created → {html_file}")
+except Exception as e:
+    print(f"[WARN] Could not create HTML summary: {e}")
+
+print("[DONE] RTM Saved Report processing completed successfully.")
