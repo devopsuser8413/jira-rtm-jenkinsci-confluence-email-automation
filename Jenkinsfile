@@ -45,8 +45,8 @@ pipeline {
     parameters {
         string(
             name: 'JIRA_ISSUE_KEY',
-            defaultValue: 'EMP-TE-01',
-            description: 'Enter Jira RTM Test Execution Key (e.g. EMP-TE-01)'
+            defaultValue: 'RD-4',
+            description: 'Enter Jira RTM Test Execution Key (e.g. RD-4)'
         )
         choice(
             name: 'ENVIRONMENT',
