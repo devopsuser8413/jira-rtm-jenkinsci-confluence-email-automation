@@ -108,24 +108,14 @@ pipeline {
             }
         }
 
-        // ------------------ 5. Email Notification ------------------
+        // ------------------ 5. Send Email Notification ------------------
         stage('Send Email Notification') {
             steps {
-                echo "Sending email notification to stakeholders..."
-                emailext(
-                    subject: "RTM Test Execution Report: ${params.JIRA_ISSUE_KEY} (${params.ENVIRONMENT})",
-                    body: """
-                    <p>Hello Team,</p>
-                    <p>The <b>RTM Test Execution Report</b> for <b>${params.JIRA_ISSUE_KEY}</b> in environment <b>${params.ENVIRONMENT}</b> has been generated successfully.</p>
-                    <p>The report has been uploaded to Confluence and is attached below for your reference.</p>
-                    <br>
-                    <p>Regards,<br>Jenkins RTM Automation</p>
-                    """,
-                    to: "${REPORT_TO}",
-                    from: "${REPORT_FROM}",
-                    attachmentsPattern: "${REPORT_HTML}, ${REPORT_PDF}",
-                    mimeType: 'text/html'
-                )
+                echo "📧 Sending email notification via Python..."
+                bat """
+                call .venv\\Scripts\\activate
+                python scripts/send_email.py ${params.JIRA_ISSUE_KEY} ${params.ENVIRONMENT}
+                """
             }
         }
     }
