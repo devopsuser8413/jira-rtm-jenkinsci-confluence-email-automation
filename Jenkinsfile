@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    triggers {
+        githubPush()
+    }
+
     parameters {
         string(name: 'JIRA_ISSUE_KEY', defaultValue: 'RD-4', description: 'Enter Jira Issue Key')
         choice(name: 'ENVIRONMENT', choices: ['DEV', 'QA', 'UAT', 'PROD'], description: 'Select the environment')
