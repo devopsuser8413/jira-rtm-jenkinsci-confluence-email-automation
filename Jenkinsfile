@@ -1,40 +1,45 @@
 pipeline {
     agent any
 
-    // -------------------------------
-    // Pipeline Parameters
-    // -------------------------------
     parameters {
-        string(name: 'JIRA_ISSUE_KEY', defaultValue: 'RD-4', description: 'Jira issue key for RTM report')
-        choice(name: 'ENVIRONMENT', choices: ['DEV', 'UAT', 'PROD'], description: 'Target environment for report generation')
+        string(name: 'JIRA_ISSUE_KEY', defaultValue: 'RD-4', description: 'Enter Jira Issue Key')
+        choice(name: 'ENVIRONMENT', choices: ['DEV', 'QA', 'UAT', 'PROD'], description: 'Select the environment')
+        string(name: 'REPORT_NAME', defaultValue: 'Test Execution Summary', description: 'Enter Saved Report Name in RTM')
     }
 
-    // -------------------------------
-    // Global Environment Variables
-    // -------------------------------
     environment {
-        // Jira Credentials
-        JIRA_BASE        = credentials('jira-base')
-        JIRA_USER        = credentials('jira-user')
-        JIRA_TOKEN       = credentials('jira-token')
+        // -----------------------
+        // Jira Configuration
+        // -----------------------
+        JIRA_BASE      = credentials('jira-base')      // e.g. https://devopsuser8413-1761792468908.atlassian.net
+        JIRA_USER      = credentials('jira-user')
+        JIRA_TOKEN     = credentials('jira-token')
+        PROJECT_KEY    = 'RD'
 
-        // Confluence Credentials
+        // -----------------------
+        // Confluence Configuration
+        // -----------------------
         CONFLUENCE_BASE  = credentials('confluence-base')
         CONFLUENCE_USER  = credentials('confluence-user')
         CONFLUENCE_TOKEN = credentials('confluence-token')
         CONFLUENCE_SPACE = 'DEMO'
         CONFLUENCE_TITLE = 'RTM Test Execution Report'
 
-        // SMTP / Email
-        SMTP_USER        = credentials('smtp-user')
-        SMTP_PASS        = credentials('smtp-pass')
-        REPORT_FROM      = credentials('sender-email')
-        REPORT_TO        = credentials('multi-receivers')
+        // -----------------------
+        // Email Configuration
+        // -----------------------
+        SMTP_HOST   = 'smtp.gmail.com'
+        SMTP_PORT   = '587'
+        SMTP_USER   = credentials('smtp-user')
+        SMTP_PASS   = credentials('smtp-pass')
+        REPORT_FROM = credentials('sender-email')
+        REPORT_TO   = credentials('multi-receivers')
 
-        // Paths
-        REPORT_DIR       = 'report'
-        PYTHONUTF8       = '1'
-        PYTHONIOENCODING = 'utf-8'
+        // -----------------------
+        // Python / Report
+        // -----------------------
+        REPORT_DIR   = 'report'
+        VENV_PATH    = '.venv'
     }
 
     options {
@@ -44,86 +49,70 @@ pipeline {
 
     stages {
 
-        // -------------------------------
-        // 1. Checkout Code
-        // -------------------------------
         stage('Checkout Repository') {
             steps {
                 echo "📦 Checking out project repository..."
-                git branch: 'main',
-                    url: 'https://github.com/devopsuser8413/jira-rtm-jenkinsci-confluence-email-automation.git',
-                    credentialsId: 'github-credentials-demo'
+                git branch: 'main', url: 'https://github.com/devopsuser8413/jira-rtm-jenkinsci-confluence-email-automation.git', credentialsId: 'github-credentials-demo'
             }
         }
 
-        // -------------------------------
-        // 2. Setup Python Environment
-        // -------------------------------
         stage('Setup Python Environment') {
             steps {
                 echo "🐍 Setting up Python virtual environment..."
-                bat """
-                    python -m venv .venv
-                    call .venv\\Scripts\\activate
+                bat '''
+                    python -m venv %VENV_PATH%
+                    call %VENV_PATH%\\Scripts\\activate
                     python -m pip install --upgrade pip
                     pip install -r requirements.txt
-                """
+                '''
             }
         }
 
-        // -------------------------------
-        // 3. Fetch Saved RTM Report from Jira
-        // -------------------------------
         stage('Fetch Saved RTM Report from Jira') {
             steps {
-                echo "📥 Fetching Saved RTM Report for ${params.JIRA_ISSUE_KEY} (${params.ENVIRONMENT})..."
+                echo "📄 Fetching Saved RTM Report for ${params.JIRA_ISSUE_KEY} (${params.ENVIRONMENT})..."
                 bat """
-                    call .venv\\Scripts\\activate
-                    python scripts/fetch_saved_rtm_report.py
+                    call %VENV_PATH%\\Scripts\\activate
+                    python scripts\\fetch_saved_rtm_report.py %JIRA_BASE% %JIRA_USER% %JIRA_TOKEN% %PROJECT_KEY% "%REPORT_NAME%"
                 """
             }
         }
 
-        // -------------------------------
-        // 4. Publish Report to Confluence
-        // -------------------------------
         stage('Publish Report to Confluence') {
+            when {
+                expression { fileExists("${REPORT_DIR}/rtm_saved_report_*.pdf") }
+            }
             steps {
-                echo "📤 Uploading reports to Confluence..."
+                echo "🌀 Uploading Saved RTM Report to Confluence..."
                 bat """
-                    call .venv\\Scripts\\activate
-                    python scripts/publish_confluence.py
+                    call %VENV_PATH%\\Scripts\\activate
+                    python scripts\\upload_to_confluence.py
                 """
             }
         }
 
-        // -------------------------------
-        // 5. Send Email Notification
-        // -------------------------------
         stage('Send Email Notification') {
+            when {
+                expression { fileExists("${REPORT_DIR}/rtm_saved_report_*.pdf") }
+            }
             steps {
-                echo "📧 Sending RTM report via email..."
+                echo "📧 Sending email notification via Python..."
                 bat """
-                    call .venv\\Scripts\\activate
-                    python scripts/send_email.py
+                    call %VENV_PATH%\\Scripts\\activate
+                    python scripts\\send_email.py "%JIRA_ISSUE_KEY%" "%ENVIRONMENT%"
                 """
             }
         }
     }
 
-    // -------------------------------
-    // Post Actions
-    // -------------------------------
     post {
-        always {
-            echo "🗂 Archiving RTM reports..."
-            archiveArtifacts artifacts: 'report/*.html, report/*.pdf', fingerprint: true
-        }
         success {
-            echo "✅ RTM Test Execution report for ${params.JIRA_ISSUE_KEY} (${params.ENVIRONMENT}) completed successfully."
+            echo "✅ RTM Saved Report processing completed successfully."
+            archiveArtifacts artifacts: 'report/*.pdf', fingerprint: true
         }
         failure {
             echo "❌ Pipeline failed during RTM report processing."
+            archiveArtifacts artifacts: 'report/*.log', fingerprint: true, allowEmptyArchive: true
         }
     }
 }
