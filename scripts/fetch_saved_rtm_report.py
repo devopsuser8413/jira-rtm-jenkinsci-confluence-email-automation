@@ -4,7 +4,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 # -----------------------------
-# Usage / Args
+# Validate arguments
 # -----------------------------
 if len(sys.argv) < 6:
     print("Usage: fetch_saved_rtm_report.py <jira_base> <jira_user> <jira_token> <project_key> <report_id>")
@@ -15,21 +15,19 @@ jira_base, jira_user, jira_token, project_key, report_id = sys.argv[1:6]
 auth = HTTPBasicAuth(jira_user, jira_token)
 
 # -----------------------------
-# Headers for RTM Cloud Heroku endpoint
+# RTM Cloud endpoint setup
 # -----------------------------
 headers = {
-    "Accept": "application/octet-stream",   # required per 406 response
+    "Accept": "application/octet-stream",  # required for binary file download
     "User-Agent": "JenkinsRTMClient/1.0"
 }
 
-# -----------------------------
-# Output setup
-# -----------------------------
 report_dir = "report"
 os.makedirs(report_dir, exist_ok=True)
 pdf_path = os.path.join(report_dir, f"{project_key}_{report_id}_report.pdf")
 
-download_url = f"https://rtm-cloud.herokuapp.com/file-download?reportId={report_id}&format=pdf"
+# The correct RTM endpoint parameter is "id", not "reportId"
+download_url = f"https://rtm-cloud.herokuapp.com/file-download?id={report_id}&format=pdf"
 
 print(f"[INFO] Starting RTM Saved Report Fetch for project: {project_key}")
 print(f"[INFO] Report ID: {report_id}")
@@ -37,13 +35,12 @@ print(f"[INFO] Download URL: {download_url}")
 
 try:
     # -----------------------------
-    # Request RTM Cloud file
+    # Send GET request
     # -----------------------------
     response = requests.get(download_url, headers=headers, auth=auth, stream=True)
     status = response.status_code
 
     if status == 200:
-        # Write file in binary chunks
         with open(pdf_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
