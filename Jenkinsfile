@@ -74,10 +74,10 @@ pipeline {
 
         stage('Fetch Saved RTM Report from Jira') {
             steps {
-                echo "📊 Fetching Saved RTM Report for ${params.JIRA_ISSUE_KEY} (${params.ENVIRONMENT})..."
+                echo "📊 Fetching Saved RTM Report for ${env.JIRA_ISSUE_KEY} (${env.ENVIRONMENT})..."
                 bat """
                     call .venv\\Scripts\\activate
-                    python scripts\\fetch_saved_rtm_report.py %JIRA_BASE% %JIRA_USER% %JIRA_TOKEN% RD ${params.JIRA_ISSUE_KEY}
+                    python scripts\\fetch_saved_rtm_report.py %JIRA_BASE% %JIRA_USER% %JIRA_TOKEN% RD ${env.JIRA_ISSUE_KEY}
                 """
             }
         }
